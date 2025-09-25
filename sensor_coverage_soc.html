@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>EU Heavy-Duty Truck – Sensor Coverage Designer + SoC YAML</title>
+  <style>
+    :root{
+      --bg:#0b1224; --panel:#0f172a; --card:#0a1020; --text:#e5e7eb; --muted:#94a3b8; --accent:#22d3ee; --border:#1f2937; --chip:#0a1226;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0; background:var(--bg); color:var(--text); font:14px/1.4 system-ui,Segoe UI,Roboto,Helvetica,Arial; display:grid; grid-template-columns:400px 1fr; grid-template-rows:100vh; overflow:hidden}
+    .panel{background:var(--panel); padding:0; border-right:1px solid var(--border); overflow:auto}
+    .tabs{display:flex; border-bottom:1px solid var(--border)}
+    .tab{flex:1; text-align:center; padding:10px 8px; cursor:pointer; user-select:none; color:#cbd5e1}
+    .tab.active{background:#0b1530; color:#fff; border-bottom:2px solid var(--accent)}
+    .view{padding:14px}
+
+    h1{font-size:16px; margin:0 0 10px}
+    h2{font-size:14px; margin:0 0 6px; color:#cbd5e1}
+    .section{background:var(--card); border:1px solid var(--border); border-radius:14px; padding:12px; margin-bottom:12px}
+    .row{display:flex; gap:8px}
+    .row>*{flex:1}
+    .row.tight>*{flex:unset}
+    label{display:block; font-size:12px; color:var(--muted); margin:6px 0 2px}
+    input,select,textarea{width:100%; background:#070c19; color:var(--text); border:1px solid var(--border); border-radius:10px; padding:8px}
+    input[type="color"]{padding:2px; height:34px}
+    input[type="range"]{height:28px}
+    textarea{min-height:160px; font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+    .btn{cursor:pointer; background:#0c1730; color:var(--text); border:1px solid var(--border); border-radius:10px; padding:8px}
+    .btn:hover{border-color:#2b3a55}
+    .btn.primary{background:#0b2236; border-color:#134e4a}
+    .btn.danger{background:#2a0d0d; border-color:#7f1d1d}
+    .btn.small{padding:6px 8px; font-size:12px}
+    .list{display:flex; flex-direction:column; gap:6px}
+    .item{display:flex; align-items:center; gap:8px; padding:8px; border:1px solid var(--border); background:#0b1020; border-radius:10px}
+    .swatch{width:14px; height:14px; border-radius:3px; border:1px solid #0006}
+
+    .stage{position:relative}
+    canvas{display:block; width:100%; height:100%}
+    .hud{position:absolute; top:10px; left:10px; display:flex; gap:8px; z-index:5}
+    .chip{padding:6px 10px; background:#0006; border:1px solid var(--border); border-radius:999px; font-size:12px}
+    .checkbox{display:flex; align-items:center; gap:8px; margin:6px 0}
+
+    .soc-card{border:1px solid var(--border); background:#0c1328; border-radius:12px; padding:10px; margin-bottom:10px}
+    .soc-head{display:flex; align-items:center; gap:8px; margin-bottom:8px}
+    .soc-head .name{font-weight:600}
+    .tag{background:var(--chip); border:1px solid #1d2a46; padding:2px 6px; border-radius:999px; font-size:11px; color:#bcd}
+    .split{display:grid; grid-template-columns:1fr 1fr; gap:8px}
+    .split3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px}
+  </style>
+</head>
+<body>
+  <aside class="panel">
+    <div class="tabs">
+      <div class="tab active" id="tabBtnDesign">Design</div>
+      <div class="tab" id="tabBtnSoc">SoC YAML</div>
+    </div>
+
+    <div id="tab-design" class="view">
+      <h1>Sensor Coverage Designer</h1>
+
+      <div class="section">
+        <h2>Add sensor</h2>
+        <div class="row">
+          <select id="sensorType">
+            <option>Camera</option>
+            <option>Radar</option>
+            <option>Lidar</option>
+            <option>Ultrasonic</option>
+            <option>Generic</option>
+          </select>
+          <button id="addSensor" class="btn primary">➕ Add</button>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <select id="addMount">
+            <option value="tractor">Mount: Tractor</option>
+            <option value="trailer">Mount: Trailer 1</option>
+            <option value="trailer2">Mount: Trailer 2</option>
+          </select>
+          <span style="flex:1"></span>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Sensors</h2>
+        <div id="list" class="list"></div>
+        <div class="row" style="margin-top:8px">
+          <button id="up" class="btn">⬆</button>
+          <button id="down" class="btn">⬇</button>
+          <button id="dup" class="btn">⧉</button>
+          <button id="del" class="btn danger">🗑</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Selected sensor</h2>
+        <div id="noSel" style="color:var(--muted)">Select a sensor to edit…</div>
+        <div id="props" style="display:none"></div>
+      </div>
+
+      <div class="section">
+        <h2>View</h2>
+        <div class="checkbox"><input id="showDots" type="checkbox" checked> <span>Show sensor points</span></div>
+        <div class="checkbox"><input id="showCoverage" type="checkbox" checked> <span>Show coverage wedges</span></div>
+        <div class="checkbox"><input id="showTrailer2" type="checkbox" checked> <span>Show Trailer 2</span></div>
+        <div style="color:var(--muted); font-size:12px; margin-top:6px">Tip: Ctrl/Cmd‑click cycles overlapping sensors under the cursor.</div>
+      </div>
+
+      <div class="section">
+        <h2>Truck & Canvas</h2>
+        <label for="truckLen">Tractor length (m)</label>
+        <input id="truckLen" type="number" min="2" max="12" step="0.1" value="6">
+        <label for="truckWid">Width (m)</label>
+        <input id="truckWid" type="number" min="1" max="3.0" step="0.05" value="2.5">
+        <label for="trailerLen">Trailer 1 length (m)</label>
+        <input id="trailerLen" type="number" min="0" max="20" step="0.1" value="13.6">
+        <label for="gap1">Gap tractor ↔ trailer 1 (m)</label>
+        <input id="gap1" type="number" min="0" max="2" step="0.05" value="0.3">
+        <label for="trailer2Len">Trailer 2 length (m)</label>
+        <input id="trailer2Len" type="number" min="0" max="20" step="0.1" value="7.0">
+        <label for="gap2">Gap trailer 1 ↔ trailer 2 (m)</label>
+        <input id="gap2" type="number" min="0" max="2" step="0.05" value="0.3">
+        <label for="scale">Scale (px per meter)</label>
+        <input id="scale" type="range" min="2" max="30" step="0.5" value="8">
+        <div class="row" style="margin-top:8px">
+          <button id="exportJSON" class="btn">Export JSON</button>
+          <button id="importJSONbtn" class="btn">Import</button>
+          <input id="importJSON" type="file" accept="application/json" style="display:none">
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button id="exportPNG" class="btn">Export PNG</button>
+          <button id="selftest" class="btn">Self‑test</button>
+        </div>
+        <div style="color:var(--muted); margin-top:6px">Tip: drag the truck to move it. 0° = forward (to the right). Positive angles are counter‑clockwise.</div>
+      </div>
+    </div>
+
+    <div id="tab-soc" class="view" style="display:none">
+      <h1>SoC Dimensioner – YAML Export</h1>
+      <div class="section">
+        <h2>Per‑sensor configuration</h2>
+        <div style="color:var(--muted); margin:6px 0 8px">Select which sensors from the design to include and set their SoC parameters.</div>
+        <div id="socList"></div>
+        <div class="row" style="margin-top:8px">
+          <button id="addSocDefaults" class="btn small">Apply sensible defaults</button>
+          <span></span>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>YAML preview</h2>
+        <textarea id="yamlPreview" readonly></textarea>
+        <div class="row" style="margin-top:8px">
+          <button id="exportYAML" class="btn primary">Export SoC YAML</button>
+          <button id="copyYAML" class="btn">Copy to clipboard</button>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="stage">
+    <div class="hud">
+      <div class="chip" id="cursor">x:0.0m y:0.0m</div>
+      <div class="chip" id="status">Ready</div>
+    </div>
+    <canvas id="cv"></canvas>
+  </main>
+
+  <script>
+  (function(){
+    // ======= Canvas & world =======
+    const canvas = document.getElementById('cv');
+    const ctx = canvas.getContext('2d');
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    let W=0, H=0; // canvas pixels
+    let pxPerMeter = 8;           // UI-controlled
+    const gridMeters = 1;         // grid spacing in meters
+    const camera = {x:0, y:0, zoom:1}; // world offset (meters)
+
+    // ======= Rig (EU tractor + up to 2 trailers) =======
+    const truck = { L: 6.0, W: 2.5, x: 0, y: 0 };
+    const trailer = { L: 13.6, gap: 0.3 };      // trailer 1
+    const trailer2 = { L: 7.0,  gap: 0.3 };      // trailer 2
+
+    // ======= View toggles =======
+    const view = { showDots: true, showCoverage: true, showTrailer2: true };
+
+    // ======= Sensors model =======
+    // A sensor is {id,name,type,color,mount,x,y,yaw,fov,range,alpha,visible,dot,coverage, soc?}
+    // mount ∈ { 'tractor', 'trailer', 'trailer2' }; x,y are RELATIVE to the chosen mount's center
+    const TYPE_PRESETS = {
+      Camera:   { color:'#60a5fa', fov:70,  range:120 },
+      Radar:    { color:'#f97316', fov:120, range:250 },
+      Lidar:    { color:'#22c55e', fov:120, range:150 },
+      Ultrasonic:{ color:'#fde047', fov:80, range:6 },
+      Generic:  { color:'#e879f9', fov:90,  range:50 }
+    };
+    let sensors = [];
+    let selectedId = null; let uid=1;
+
+    // ======= UI refs (Design) =======
+    const elList = document.getElementById('list');
+    const elProps = document.getElementById('props');
+    const elNoSel = document.getElementById('noSel');
+    const elStatus = document.getElementById('status');
+    const elCursor = document.getElementById('cursor');
+
+    // ======= UI refs (Tabs + SoC) =======
+    const tabBtnDesign = document.getElementById('tabBtnDesign');
+    const tabBtnSoc = document.getElementById('tabBtnSoc');
+    const tabDesign = document.getElementById('tab-design');
+    const tabSoc = document.getElementById('tab-soc');
+    const socList = document.getElementById('socList');
+    const yamlPreview = document.getElementById('yamlPreview');
+
+    // ======= Tabs =======
+    tabBtnDesign.onclick = ()=>{ tabBtnDesign.classList.add('active'); tabBtnSoc.classList.remove('active'); tabDesign.style.display='block'; tabSoc.style.display='none'; };
+    tabBtnSoc.onclick = ()=>{ tabBtnSoc.classList.add('active'); tabBtnDesign.classList.remove('active'); tabDesign.style.display='none'; tabSoc.style.display='block'; buildSocList(); updateYamlPreview(); };
+
+    // ======= Helpers =======
+    function newId(){return uid++;}
+    function reseedUid(){ uid = sensors.reduce((m,s)=>Math.max(m, (typeof s.id==='number'?s.id:0)), 0) + 1; }
+    function m2p(m){return m*pxPerMeter*camera.zoom;}
+    function p2m(p){return p/(pxPerMeter*camera.zoom);}
+    function worldToScreen(xm,ym){ return { x: W/2 + m2p(xm - camera.x), y: H/2 - m2p(ym - camera.y) }; }
+    function screenToWorld(px,py){ return { x: camera.x + p2m(px - W/2), y: camera.y - p2m(py - H/2) }; }
+    function toRad(d){return d*Math.PI/180;}
+    function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+    function trailerCenter(){ return { x: truck.x - (truck.L/2 + trailer.gap + trailer.L/2), y: truck.y }; }
+    function trailer2Center(){ return { x: truck.x - (truck.L/2 + trailer.gap + trailer.L + trailer2.gap + trailer2.L/2), y: truck.y }; }
+    function mountCenter(m){ return m==='trailer2'? trailer2Center() : (m==='trailer'? trailerCenter() : {x:truck.x,y:truck.y}); }
+    function mountSize(m){ return m==='trailer2'? {L:trailer2.L, W:truck.W} : (m==='trailer'? {L:trailer.L, W:truck.W} : {L:truck.L, W:truck.W}); }
+    function sensorWorldPos(s){ const c=mountCenter(s.mount); return {x:c.x + s.x, y:c.y + s.y}; }
+    function sensorPickable(s){ if(s.visible===false) return false; if(s.mount==='trailer2' && !view.showTrailer2) return false; const dotVisible = view.showDots && s.dot!==false; const covVisible = view.showCoverage && s.coverage!==false; return dotVisible || covVisible; }
+    const slug = str=>String(str||'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');
+
+    // ======= Draw =======
+    function draw(){
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+      ctx.clearRect(0,0,W,H);
+      drawGrid();
+      drawRig();
+      sensors.forEach(s => { if(s.visible!==false) drawSensor(s); });
+      const s = sensors.find(x=>x.id===selectedId); if(s) drawSelection(s);
+    }
+    function drawGrid(){
+      const step = m2p(gridMeters); const ox = W/2 + m2p(-camera.x); const oy = H/2 + m2p(camera.y);
+      ctx.save(); ctx.strokeStyle = '#ffffff12'; ctx.lineWidth = 1; for(let x=ox%step; x<W; x+=step){ line(x,0,x,H); } for(let y=oy%step; y<H; y+=step){ line(0,y,W,y); }
+      ctx.strokeStyle = '#94a3b844'; line(0, H/2 - m2p(-camera.y), W, H/2 - m2p(-camera.y)); line(W/2 + m2p(-camera.x), 0, W/2 + m2p(-camera.x), H);
+      const m=10, px=m2p(m); ctx.fillStyle='#ffffffcc'; ctx.fillRect(14,H-24,px,6); ctx.fillText(`${m} m`, 18+px, H-18); ctx.restore(); }
+    function drawRig(){
+      const c = worldToScreen(truck.x,truck.y); const wT = m2p(truck.L), h = m2p(truck.W); const xT = c.x - wT/2, y = c.y - h/2; ctx.save();
+      const wR1 = m2p(trailer.L), gap1 = m2p(trailer.gap); const xR1 = xT - gap1 - wR1; const wR2=m2p(trailer2.L), gap2=m2p(trailer2.gap); const xR2 = xR1 - gap2 - wR2;
+      if(view.showTrailer2 && trailer2.L>0){ ctx.fillStyle = '#e2e8f0'; ctx.strokeStyle='#94a3b8'; ctx.lineWidth=2; roundedRect(ctx, xR2, y, wR2, h, 3); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#111827'; ctx.fillRect(xR1 - gap2, y, gap2, h); }
+      ctx.fillStyle = '#e5e7eb'; ctx.strokeStyle='#9ca3af'; ctx.lineWidth=2; roundedRect(ctx, xR1, y, wR1, h, 3); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#111827'; ctx.fillRect(xT - gap1, y, gap1, h);
+      ctx.fillStyle = '#b91c1c'; ctx.strokeStyle='#7f1d1d'; ctx.lineWidth=2; roundedRect(ctx, xT, y, wT, h, 4); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#1f2937'; ctx.fillRect(xT + wT*0.75, y+4, wT*0.22, h-8);
+      ctx.beginPath(); ctx.moveTo(xT+wT+10, c.y); ctx.lineTo(xT+wT+30, c.y); ctx.lineTo(xT+wT+22, c.y-6); ctx.moveTo(xT+wT+30, c.y); ctx.lineTo(xT+wT+22, c.y+6); ctx.strokeStyle='#22d3ee'; ctx.stroke(); ctx.restore(); }
+    function drawSensor(s){ if(s.mount==='trailer2' && !view.showTrailer2) return; const wp = sensorWorldPos(s); const pos = worldToScreen(wp.x, wp.y); const R = Math.max(0, m2p(s.range)); const half = toRad(s.fov/2); const start = -toRad(s.yaw) - half; const end=start+2*half; ctx.save(); if(view.showCoverage && s.coverage!==false){ ctx.fillStyle = hexToRgba(s.color, s.alpha ?? 0.35); ctx.beginPath(); ctx.moveTo(pos.x, pos.y); ctx.arc(pos.x, pos.y, R, start, end, false); ctx.closePath(); ctx.fill(); } if(view.showDots && s.dot!==false){ ctx.beginPath(); ctx.fillStyle=s.color; ctx.arc(pos.x, pos.y, 4, 0, Math.PI*2); ctx.fill(); } ctx.restore(); }
+    function drawSelection(s){ if(s.mount==='trailer2' && !view.showTrailer2) return; const wp = sensorWorldPos(s); const p = worldToScreen(wp.x, wp.y); const R=m2p(s.range); ctx.save(); ctx.setLineDash([6,6]); ctx.strokeStyle=s.color; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(p.x,p.y,R,0,Math.PI*2); ctx.stroke(); ctx.setLineDash([]); const a=toRad(s.yaw); ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(p.x + R*Math.cos(a), p.y - R*Math.sin(a)); ctx.stroke(); ctx.restore(); }
+
+    // ======= UI – list & props =======
+    function refreshList(){ elList.innerHTML=''; sensors.forEach(s=>{ const row=document.createElement('div'); row.className='item'; const sw=document.createElement('div'); sw.className='swatch'; sw.style.background=s.color; row.appendChild(sw); const suffix = s.mount==='trailer'?' (trailer 1)': (s.mount==='trailer2'?' (trailer 2)':''); const name=document.createElement('div'); name.textContent=s.name + suffix; name.style.flex='1'; row.appendChild(name); const vis=document.createElement('input'); vis.type='checkbox'; vis.checked=s.visible!==false; vis.title='Show/hide sensor entirely'; vis.addEventListener('click', ev=>ev.stopPropagation()); vis.addEventListener('change', ev=>{ s.visible = ev.target.checked; if(!s.visible && selectedId===s.id) { selectedId=null; openProps(null); } draw(); }); row.appendChild(vis); row.onclick=()=>{selectedId=s.id; openProps(s); refreshList(); draw();}; if(selectedId===s.id) row.style.outline='2px solid var(--accent)'; row.ondblclick=()=>{ const n=prompt('Rename sensor', s.name); if(n){s.name=n; if(!s.soc || !s.soc.manualName){ ensureSoc(s); s.soc.name = defaultSocName(s); } refreshList(); buildSocList(); updateYamlPreview(); draw();} }; elList.appendChild(row); }); }
+
+    function addSliderNumber(label, cfg){ const wrap=document.createElement('div'); const L=document.createElement('label'); L.textContent=label; wrap.appendChild(L); const row=document.createElement('div'); row.className='row'; const slider=document.createElement('input'); slider.type='range'; slider.min=cfg.min; slider.max=cfg.max; slider.step=cfg.step; slider.value=cfg.get(); const num=document.createElement('input'); num.type='number'; num.min=cfg.min; num.max=cfg.max; num.step=cfg.step; num.value=cfg.get(); slider.oninput=()=>{ num.value=slider.value; cfg.set(parseFloat(slider.value)); draw(); }; num.oninput=()=>{ const v=parseFloat(num.value); if(!isNaN(v)){ slider.value=v; cfg.set(v); draw(); } }; row.appendChild(slider); row.appendChild(num); wrap.appendChild(row); return wrap; }
+
+    function openProps(s){ if(!s){ elNoSel.style.display='block'; elProps.style.display='none'; return; } elNoSel.style.display='none'; elProps.style.display='block'; elProps.innerHTML=''; const addEl=(el)=>elProps.appendChild(el);
+      const name=document.createElement('input'); name.value=s.name; name.oninput=()=>{s.name=name.value; refreshList(); buildSocList(); updateYamlPreview(); draw();}; const nameLab=document.createElement('label'); nameLab.textContent='Name'; elProps.appendChild(nameLab); elProps.appendChild(name);
+      const mount=document.createElement('select'); [{t:'Tractor',v:'tractor'},{t:'Trailer 1',v:'trailer'},{t:'Trailer 2',v:'trailer2'}].forEach(o=>{const opt=document.createElement('option'); opt.value=o.v; opt.textContent=o.t; if(s.mount===o.v) opt.selected=true; mount.appendChild(opt);}); mount.onchange=()=>{ s.mount=mount.value; const ms=mountSize(s.mount); s.x = clamp(s.x, -ms.L/2, ms.L/2); s.y = clamp(s.y, -ms.W/2, ms.W/2); if(s.mount==='trailer2' && !view.showTrailer2){ view.showTrailer2=true; document.getElementById('showTrailer2').checked=true; } draw(); refreshList(); }; const mountLab=document.createElement('label'); mountLab.textContent='Mounted on'; elProps.appendChild(mountLab); elProps.appendChild(mount);
+      const type=document.createElement('select'); ['Camera','Radar','Lidar','Ultrasonic','Generic'].forEach(t=>{const o=document.createElement('option'); o.textContent=t; if(t===s.type) o.selected=true; type.appendChild(o);}); type.onchange=()=>{s.type=type.value; const p=TYPE_PRESETS[s.type]; if(p){ s.color=p.color; if(!s.userFov) s.fov=p.fov; if(!s.userRange) s.range=p.range; } ensureSoc(s,true); openProps(s); buildSocList(); updateYamlPreview(); draw(); refreshList();}; const typeLab=document.createElement('label'); typeLab.textContent='Type'; elProps.appendChild(typeLab); elProps.appendChild(type);
+      const color=document.createElement('input'); color.type='color'; color.value=toHex(s.color); color.oninput=()=>{s.color=color.value; draw(); refreshList();}; const colorLab=document.createElement('label'); colorLab.textContent='Color'; elProps.appendChild(colorLab); elProps.appendChild(color);
+      const chkRow1=document.createElement('div'); chkRow1.className='checkbox'; const cov=document.createElement('input'); cov.type='checkbox'; cov.checked=s.coverage!==false; cov.onchange=()=>{s.coverage = cov.checked; if(!sensorPickable(s) && selectedId===s.id){ selectedId=null; openProps(null);} draw();}; chkRow1.appendChild(cov); chkRow1.appendChild(document.createTextNode('Show coverage'));
+      const chkRow2=document.createElement('div'); chkRow2.className='checkbox'; const dot=document.createElement('input'); dot.type='checkbox'; dot.checked=s.dot!==false; dot.onchange=()=>{s.dot = dot.checked; if(!sensorPickable(s) && selectedId===s.id){ selectedId=null; openProps(null);} draw();}; chkRow2.appendChild(dot); chkRow2.appendChild(document.createTextNode('Show sensor point'));
+      elProps.appendChild(chkRow1); elProps.appendChild(chkRow2);
+      const posLab=document.createElement('label'); posLab.textContent='Position on mount (m): x, y'; elProps.appendChild(posLab); const posRow=document.createElement('div'); posRow.className='row'; const x=document.createElement('input'); x.type='number'; x.step='0.1'; x.value=s.x; x.oninput=()=>{s.x=parseFloat(x.value)||0; draw();}; const y=document.createElement('input'); y.type='number'; y.step='0.1'; y.value=s.y; y.oninput=()=>{s.y=parseFloat(y.value)||0; draw();}; posRow.appendChild(x); posRow.appendChild(y); elProps.appendChild(posRow);
+      addEl(addSliderNumber('Yaw / viewing angle (deg)', {min:-180,max:180,step:1, get:()=>s.yaw, set:v=>{s.yaw=v;}}));
+      addEl(addSliderNumber('Field of view (deg)', {min:5,max:180,step:1, get:()=>s.fov, set:v=>{s.fov=v; s.userFov=true;}}));
+      addEl(addSliderNumber('Range (m)', {min:1,max:500,step:1, get:()=>s.range, set:v=>{s.range=v; s.userRange=true;}}));
+      const alpha=document.createElement('input'); alpha.type='range'; alpha.min=0.05; alpha.max=0.9; alpha.step=0.05; alpha.value=s.alpha; alpha.oninput=()=>{s.alpha=parseFloat(alpha.value); draw();}; const alphaLab=document.createElement('label'); alphaLab.textContent='Coverage opacity'; elProps.appendChild(alphaLab); elProps.appendChild(alpha);
+    }
+
+    // ======= SoC helpers & UI =======
+    function defaultSocName(s){ const pref = (s.type==='Radar')? 'radar' : (s.type==='Camera'?'cam':slug(s.type||'sensor')); return pref + '_' + slug(s.name||('sensor_'+s.id)); }
+    function ensureSoc(s, reset=false){
+      if(!s.soc || reset){
+        const camLike = s.type==='Camera';
+        const radarLike = s.type==='Radar';
+        const include = camLike || radarLike;
+        s.soc = s.soc||{};
+        s.soc = {
+          include: include,
+          name: s.soc.name || defaultSocName(s),
+          manualName: !!s.soc.manualName,
+          type: camLike? 'cam' : (radarLike? 'radar' : 'cam'),
+          link: camLike? (s.soc.link||'GMSL') : undefined,
+          fps_stream: camLike? (s.soc.fps_stream??60) : (radarLike? (s.soc.fps_stream??20) : undefined),
+          cv_fps: camLike? (s.soc.cv_fps??30) : undefined,
+          human_vision: camLike? (typeof s.soc.human_vision==='boolean'?s.soc.human_vision:true) : undefined,
+          roles: Array.isArray(s.soc.roles)? s.soc.roles.slice() : ['bev','per_sensor'],
+          // cam fields (GMSL-only)
+          raw_mp: camLike? (s.soc.raw_mp??3.0) : undefined,
+          bit_depth: camLike? (s.soc.bit_depth??12) : undefined,
+          bpp_overhead: camLike? (s.soc.bpp_overhead??1.25) : undefined,
+          // common NN inputs
+          nn_input_mp: camLike? (s.soc.nn_input_mp??1.0) : (radarLike? (s.soc.nn_input_mp??1.0) : undefined),
+          nn_input_mp_det: camLike? (s.soc.nn_input_mp_det??1.0) : (radarLike? (s.soc.nn_input_mp_det??1.0) : undefined),
+          nn_input_mp_seg: camLike? (s.soc.nn_input_mp_seg??0.0) : (radarLike? (s.soc.nn_input_mp_seg??0.0) : undefined),
+          // ETH-only for cams
+          codec: camLike? s.soc.codec : undefined,
+          width: camLike? s.soc.width : undefined,
+          height: camLike? s.soc.height : undefined,
+          ethernet_mbps: radarLike? (s.soc.ethernet_mbps??1000) : (camLike? s.soc.ethernet_mbps : undefined)
+        };
+      }
+    }
+
+    function buildSocList(){ socList.innerHTML=''; sensors.forEach(s=>{ ensureSoc(s); const sc=s.soc; const card=document.createElement('div'); card.className='soc-card';
+      const head=document.createElement('div'); head.className='soc-head';
+      const chk=document.createElement('input'); chk.type='checkbox'; chk.checked=sc.include; chk.onchange=()=>{ sc.include=chk.checked; updateYamlPreview(); };
+      const title=document.createElement('span'); title.className='name'; title.textContent=s.name;
+      const tag=document.createElement('span'); tag.className='tag'; tag.textContent = s.type + ' • ' + (s.mount==='tractor'?'tractor':(s.mount==='trailer'?'trailer 1':'trailer 2'));
+      head.appendChild(chk); head.appendChild(title); head.appendChild(tag); card.appendChild(head);
+
+      const labNm=document.createElement('label'); labNm.textContent='Export name'; card.appendChild(labNm);
+      const nm=document.createElement('input'); nm.value=sc.name; nm.oninput=()=>{ sc.name=nm.value; sc.manualName=true; updateYamlPreview(); }; card.appendChild(nm);
+
+      const split1=document.createElement('div'); split1.className='split';
+      const typeLab=document.createElement('label'); typeLab.textContent='Sensor type';
+      const typeSel=document.createElement('select'); ['cam','radar'].forEach(t=>{const o=document.createElement('option'); o.value=t; o.textContent=t; if(sc.type===t) o.selected=true; typeSel.appendChild(o);});
+      typeSel.onchange=()=>{ sc.type=typeSel.value; if(sc.type==='radar'){ sc.link=undefined; sc.human_vision=undefined; sc.cv_fps=undefined; sc.raw_mp=undefined; sc.bit_depth=undefined; sc.bpp_overhead=undefined; sc.codec=undefined; sc.width=undefined; sc.height=undefined; sc.ethernet_mbps=sc.ethernet_mbps??1000; sc.fps_stream=sc.fps_stream??20; } else { sc.link=sc.link||'GMSL'; sc.fps_stream=sc.fps_stream??60; sc.cv_fps=sc.cv_fps??30; sc.human_vision = (typeof sc.human_vision==='boolean')?sc.human_vision:true; }
+        updateYamlPreview(); buildSocList(); };
+      const rolesWrap=document.createElement('div'); rolesWrap.innerHTML = '<label>Roles</label>';
+      ['bev','per_sensor'].forEach(r=>{ const L=document.createElement('label'); L.style.display='inline-flex'; L.style.alignItems='center'; L.style.gap='6px'; L.style.marginRight='10px'; const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=sc.roles.includes(r); cb.onchange=()=>{ if(cb.checked){ if(!sc.roles.includes(r)) sc.roles.push(r);} else { sc.roles=sc.roles.filter(x=>x!==r);} updateYamlPreview(); }; L.appendChild(cb); L.appendChild(document.createTextNode(r)); rolesWrap.appendChild(L); });
+      split1.appendChild(typeLab); split1.appendChild(typeSel); split1.appendChild(rolesWrap); card.appendChild(split1);
+
+      if(sc.type==='cam'){
+        // Link
+        const linkRow=document.createElement('div'); linkRow.className='split3';
+        const linkLab=document.createElement('label'); linkLab.textContent='Link';
+        const linkSel=document.createElement('select'); ['GMSL','ETH'].forEach(v=>{const o=document.createElement('option'); o.value=v; o.textContent=v; if(sc.link===v) o.selected=true; linkSel.appendChild(o);});
+        linkSel.onchange=()=>{ sc.link=linkSel.value; if(sc.link==='ETH'){ sc.fps_stream=undefined; sc.cv_fps=undefined; // keep HV
+            sc.raw_mp=undefined; sc.bit_depth=undefined; sc.bpp_overhead=undefined; sc.codec=sc.codec||'H265'; sc.width=sc.width||1920; sc.height=sc.height||1080; sc.ethernet_mbps=sc.ethernet_mbps??100; sc.human_vision = (typeof sc.human_vision==='boolean')?sc.human_vision:true; } else { sc.codec=undefined; sc.width=undefined; sc.height=undefined; sc.ethernet_mbps=undefined; sc.fps_stream=sc.fps_stream??60; sc.cv_fps=sc.cv_fps??30; sc.human_vision = (typeof sc.human_vision==='boolean')?sc.human_vision:true; sc.raw_mp=sc.raw_mp??3.0; sc.bit_depth=sc.bit_depth??12; sc.bpp_overhead=sc.bpp_overhead??1.25; }
+          updateYamlPreview(); buildSocList(); };
+        linkRow.appendChild(linkLab); linkRow.appendChild(linkSel); card.appendChild(linkRow);
+
+        if(sc.link==='GMSL'){
+          // fps_stream, cv_fps, HV
+          const split2=document.createElement('div'); split2.className='split3';
+          const fpsLab=document.createElement('label'); fpsLab.textContent='fps_stream'; const fps=document.createElement('input'); fps.type='number'; fps.step='1'; fps.value=sc.fps_stream??60; fps.oninput=()=>{ sc.fps_stream=parseFloat(fps.value)||0; updateYamlPreview(); };
+          const cvLab=document.createElement('label'); cvLab.textContent='cv_fps'; const cv=document.createElement('input'); cv.type='number'; cv.step='1'; cv.value=sc.cv_fps??30; cv.oninput=()=>{ sc.cv_fps=parseFloat(cv.value)||0; updateYamlPreview(); };
+          const hvLab=document.createElement('label'); hvLab.textContent='human_vision'; const hv=document.createElement('select'); ['true','false'].forEach(v=>{const o=document.createElement('option'); o.value=v; o.textContent=v; if(String(sc.human_vision)===v) o.selected=true; hv.appendChild(o);}); hv.onchange=()=>{ sc.human_vision = (hv.value==='true'); updateYamlPreview(); };
+          split2.appendChild(fpsLab); split2.appendChild(fps); split2.appendChild(cvLab); split2.appendChild(cv); split2.appendChild(hvLab); split2.appendChild(hv); card.appendChild(split2);
+
+          // RAW + NN inputs
+          const split3=document.createElement('div'); split3.className='split3';
+          const rawLab=document.createElement('label'); rawLab.textContent='raw_mp'; const raw=document.createElement('input'); raw.type='number'; raw.step='0.1'; raw.value=sc.raw_mp??3.0; raw.oninput=()=>{ sc.raw_mp=parseFloat(raw.value)||0; updateYamlPreview(); };
+          const bdLab=document.createElement('label'); bdLab.textContent='bit_depth'; const bd=document.createElement('input'); bd.type='number'; bd.step='1'; bd.value=sc.bit_depth??12; bd.oninput=()=>{ sc.bit_depth=parseInt(bd.value)||0; updateYamlPreview(); };
+          const boLab=document.createElement('label'); boLab.textContent='bpp_overhead'; const bo=document.createElement('input'); bo.type='number'; bo.step='0.01'; bo.value=sc.bpp_overhead??1.25; bo.oninput=()=>{ sc.bpp_overhead=parseFloat(bo.value)||0; updateYamlPreview(); };
+          split3.appendChild(rawLab); split3.appendChild(raw); split3.appendChild(bdLab); split3.appendChild(bd); split3.appendChild(boLab); split3.appendChild(bo); card.appendChild(split3);
+
+          const split4=document.createElement('div'); split4.className='split3';
+          const n1L=document.createElement('label'); n1L.textContent='nn_input_mp'; const n1=document.createElement('input'); n1.type='number'; n1.step='0.1'; n1.value=sc.nn_input_mp??1.0; n1.oninput=()=>{ sc.nn_input_mp=parseFloat(n1.value)||0; updateYamlPreview(); };
+          const n2L=document.createElement('label'); n2L.textContent='nn_input_mp_det'; const n2=document.createElement('input'); n2.type='number'; n2.step='0.1'; n2.value=sc.nn_input_mp_det??1.0; n2.oninput=()=>{ sc.nn_input_mp_det=parseFloat(n2.value)||0; updateYamlPreview(); };
+          const n3L=document.createElement('label'); n3L.textContent='nn_input_mp_seg'; const n3=document.createElement('input'); n3.type='number'; n3.step='0.1'; n3.value=sc.nn_input_mp_seg??0.0; n3.oninput=()=>{ sc.nn_input_mp_seg=parseFloat(n3.value)||0; updateYamlPreview(); };
+          split4.appendChild(n1L); split4.appendChild(n1); split4.appendChild(n2L); split4.appendChild(n2); split4.appendChild(n3L); split4.appendChild(n3); card.appendChild(split4);
+        } else if(sc.link==='ETH'){
+          const split5=document.createElement('div'); split5.className='split3';
+          const cL=document.createElement('label'); cL.textContent='codec'; const cI=document.createElement('input'); cI.value=sc.codec||'H265'; cI.oninput=()=>{ sc.codec=cI.value||undefined; updateYamlPreview(); };
+          const wL=document.createElement('label'); wL.textContent='width'; const wI=document.createElement('input'); wI.type='number'; wI.step='1'; wI.value=sc.width||1920; wI.oninput=()=>{ const v=parseInt(wI.value); sc.width=Number.isFinite(v)?v:undefined; updateYamlPreview(); };
+          const hL=document.createElement('label'); hL.textContent='height'; const hI=document.createElement('input'); hI.type='number'; hI.step='1'; hI.value=sc.height||1080; hI.oninput=()=>{ const v=parseInt(hI.value); sc.height=Number.isFinite(v)?v:undefined; updateYamlPreview(); };
+          split5.appendChild(cL); split5.appendChild(cI); split5.appendChild(wL); split5.appendChild(wI); split5.appendChild(hL); split5.appendChild(hI); card.appendChild(split5);
+
+          const split6=document.createElement('div'); split6.className='split3';
+          const ethL=document.createElement('label'); ethL.textContent='ethernet_mbps'; const eth=document.createElement('input'); eth.type='number'; eth.step='1'; eth.value=sc.ethernet_mbps??100; eth.oninput=()=>{ const v=parseInt(eth.value); sc.ethernet_mbps=Number.isFinite(v)?v:undefined; updateYamlPreview(); };
+          const n1L=document.createElement('label'); n1L.textContent='nn_input_mp'; const n1=document.createElement('input'); n1.type='number'; n1.step='0.1'; n1.value=sc.nn_input_mp??0.0; n1.oninput=()=>{ sc.nn_input_mp=parseFloat(n1.value)||0; updateYamlPreview(); };
+          const n2L=document.createElement('label'); n2L.textContent='nn_input_mp_det'; const n2=document.createElement('input'); n2.type='number'; n2.step='0.1'; n2.value=sc.nn_input_mp_det??1.0; n2.oninput=()=>{ sc.nn_input_mp_det=parseFloat(n2.value)||0; updateYamlPreview(); };
+          split6.appendChild(ethL); split6.appendChild(eth); split6.appendChild(n1L); split6.appendChild(n1); split6.appendChild(n2L); split6.appendChild(n2); card.appendChild(split6);
+
+          const hvRow=document.createElement('div'); hvRow.className='split3';
+          const hvLab=document.createElement('label'); hvLab.textContent='human_vision';
+          const hv=document.createElement('select'); ['true','false'].forEach(v=>{const o=document.createElement('option'); o.value=v; o.textContent=v; if(String(sc.human_vision)===v) o.selected=true; hv.appendChild(o);});
+          hv.onchange=()=>{ sc.human_vision = (hv.value==='true'); updateYamlPreview(); };
+          hvRow.appendChild(hvLab); hvRow.appendChild(hv);
+          card.appendChild(hvRow);
+        }
+      } else { // radar
+        const splitR=document.createElement('div'); splitR.className='split3';
+        const ethL=document.createElement('label'); ethL.textContent='ethernet_mbps'; const eth=document.createElement('input'); eth.type='number'; eth.step='1'; eth.value=sc.ethernet_mbps??1000; eth.oninput=()=>{ sc.ethernet_mbps=parseInt(eth.value)||0; updateYamlPreview(); };
+        const fpsLab=document.createElement('label'); fpsLab.textContent='fps_stream'; const fps=document.createElement('input'); fps.type='number'; fps.step='1'; fps.value=sc.fps_stream??20; fps.oninput=()=>{ sc.fps_stream=parseFloat(fps.value)||0; updateYamlPreview(); };
+        splitR.appendChild(ethL); splitR.appendChild(eth); splitR.appendChild(fpsLab); splitR.appendChild(fps);
+        card.appendChild(splitR);
+      }
+
+      socList.appendChild(card);
+    }); }
+
+    function num(v){ return (v===undefined||v===null||Number.isNaN(v))?null: (Number.isInteger(v)? v : +(+v).toFixed(3)); }
+    function yamlQuoteStr(s){ if(s===undefined||s===null) return ''; if(/^[A-Za-z0-9_\.]+$/.test(s)) return s; return JSON.stringify(String(s)); }
+    function yamlArray(arr){ return '[' + arr.map(x=>x).join(', ') + ']'; }
+
+    const FIXED_HEADER =
+`system:\n  utilization: 0.6\nnn:\n  precision: INT8\n  precision_speed:\n    INT8: 1.0\n    FP16: 0.6\n    FP32: 0.2\nblocks:\n  encoder_bev:\n    type: mp_scaled\n    gmac_per_mp: 30\n  det_mid:\n    type: mp_scaled\n    gmac_per_mp: 42.7\n  seg_light:\n    type: mp_scaled\n    gmac_per_mp: 20\n    precision: FP16\n  bev_core:\n    type: fixed\n    gmac_per_frame: 80\n    precision: FP16\n  bev_heads:\n    type: fixed\n    gmac_per_frame: 30\n  radar_pillar:\n    type: fixed\n    gmac_per_frame: 5\n  radar_lr_det:\n    type: fixed\n    gmac_per_frame: 10\n  radar_mid_det:\n    type: fixed\n    gmac_per_frame: 8\nsensors:`;
+
+    const FIXED_FOOTER =
+`\npipelines:\n  bev:\n    fps: 30\n    shared_blocks:\n      - {ref: bev_core}\n      - {ref: bev_heads}\n    per_sensor_blocks:\n      cam:\n        - {ref: encoder_bev, nn_input_mp_key: nn_input_mp}\n      radar_eth:\n        - {ref: radar_pillar}\n\n  per_sensor:\n    per_type_blocks:\n      cam:\n        - {ref: det_mid,  nn_input_mp_key: nn_input_mp_det}\n        - {ref: seg_light, nn_input_mp_key: nn_input_mp_seg}\n      radar_eth:\n        - {ref: radar_lr_det}\n        - {ref: radar_mid_det}\ndimensioning:\n  isp_rw_per_pixel: 2.0\n  ldc_rw_per_pixel: 3.0\n  msc_rw_per_pixel: 2.0\n  nn_bytes_per_gmac: 1024\n  hv_rw_per_pixel: 2.0\n  hv_bpp: 1.5\n  buffering:\n    frames_per_stream: 3\n  csi2:\n    lane_rate_ghz: 2.0\n    valid_lane_bundles:\n      - 2\n      - 4\n      - 8\n    margin: 1.3\n    total_lane_budget: 64\n    total_port_budget: 16\n`;
+
+    function buildSensorsYaml(){
+      const parts=[];
+      sensors.forEach((s)=>{
+        ensureSoc(s);
+        const sc=s.soc; if(!sc.include) return;
+        const lines=[];
+        lines.push(`  # ---------- ${s.type}: ${s.name} ----------`);
+        lines.push(`  - name: ${yamlQuoteStr(sc.name)}`);
+        lines.push(`    type: ${sc.type}`);
+        if(sc.type==='cam'){
+          lines.push(`    link: ${sc.link||'GMSL'}`);
+          if(sc.link==='ETH'){
+            if(sc.codec) lines.push(`    codec: ${sc.codec}`);
+            if(num(sc.width)!=null) lines.push(`    width: ${num(sc.width)}`);
+            if(num(sc.height)!=null) lines.push(`    height: ${num(sc.height)}`);
+            if(num(sc.ethernet_mbps)!=null) lines.push(`    ethernet_mbps: ${num(sc.ethernet_mbps)}`);
+            lines.push(`    human_vision: ${!!sc.human_vision}`);
+            if(sc.roles?.length) lines.push(`    roles: ${yamlArray(sc.roles)}`);
+            if(num(sc.nn_input_mp)!=null) lines.push(`    nn_input_mp: ${num(sc.nn_input_mp)}`);
+            if(num(sc.nn_input_mp_det)!=null) lines.push(`    nn_input_mp_det: ${num(sc.nn_input_mp_det)}`);
+            if(num(sc.nn_input_mp_seg)!=null) lines.push(`    nn_input_mp_seg: ${num(sc.nn_input_mp_seg)}`);
+          } else { // GMSL
+            if(num(sc.fps_stream)!=null) lines.push(`    fps_stream: ${num(sc.fps_stream)}`);
+            if(num(sc.cv_fps)!=null) lines.push(`    cv_fps: ${num(sc.cv_fps)}`);
+            lines.push(`    human_vision: ${!!sc.human_vision}`);
+            if(sc.roles?.length) lines.push(`    roles: ${yamlArray(sc.roles)}`);
+            if(num(sc.raw_mp)!=null) lines.push(`    raw_mp: ${num(sc.raw_mp)}`);
+            if(num(sc.bit_depth)!=null) lines.push(`    bit_depth: ${num(sc.bit_depth)}`);
+            if(num(sc.bpp_overhead)!=null) lines.push(`    bpp_overhead: ${num(sc.bpp_overhead)}`);
+            if(num(sc.nn_input_mp)!=null) lines.push(`    nn_input_mp: ${num(sc.nn_input_mp)}`);
+            if(num(sc.nn_input_mp_det)!=null) lines.push(`    nn_input_mp_det: ${num(sc.nn_input_mp_det)}`);
+            if(num(sc.nn_input_mp_seg)!=null) lines.push(`    nn_input_mp_seg: ${num(sc.nn_input_mp_seg)}`);
+          }
+        } else { // radar
+          if(sc.roles?.length) lines.push(`    roles: ${yamlArray(sc.roles)}`);
+          if(num(sc.ethernet_mbps)!=null) lines.push(`    ethernet_mbps: ${num(sc.ethernet_mbps)}`);
+          if(num(sc.fps_stream)!=null) lines.push(`    fps_stream: ${num(sc.fps_stream)}`);
+        }
+        parts.push(lines.join('\n'));
+      });
+      return parts.join('\n') + (parts.length?'\n':'');
+    }
+
+    function updateYamlPreview(){ const sensorsYaml = buildSensorsYaml(); yamlPreview.value = FIXED_HEADER + '\n' + sensorsYaml + FIXED_FOOTER; }
+
+    document.getElementById('exportYAML').onclick = ()=>{ updateYamlPreview(); const blob=new Blob([yamlPreview.value],{type:'text/yaml'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='soc_dimensioner_config.yaml'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),500); };
+    document.getElementById('copyYAML').onclick = async ()=>{ updateYamlPreview(); try{ await navigator.clipboard.writeText(yamlPreview.value); alert('YAML copied to clipboard'); }catch(e){ console.warn('Clipboard not available'); } };
+    document.getElementById('addSocDefaults').onclick = ()=>{ sensors.forEach(s=>ensureSoc(s,true)); buildSocList(); updateYamlPreview(); };
+
+    // ======= Add/Delete/Reorder =======
+    document.getElementById('addSensor').onclick = () => {
+      const type = document.getElementById('sensorType').value;
+      const mountSel = document.getElementById('addMount').value;
+      const p = TYPE_PRESETS[type];
+      const defX = mountSel==='tractor' ? truck.L/2 - 0.5 : (mountSel==='trailer' ? trailer.L/2 - 0.5 : trailer2.L/2 - 0.5);
+      const sensor = { id:newId(), name:`${type} ${uid-1}`, type, mount:mountSel, color:p.color, x: defX, y: 0, yaw:0, fov:p.fov, range:p.range, alpha:0.35, visible:true, dot:true, coverage:true };
+      ensureSoc(sensor,true);
+      sensors.push(sensor); selectedId=sensor.id; refreshList(); openProps(sensor); buildSocList(); updateYamlPreview(); draw();
+    };
+    document.getElementById('del').onclick = () => { const i=sensors.findIndex(s=>s.id===selectedId); if(i>=0){ sensors.splice(i,1); selectedId=null; refreshList(); openProps(null); buildSocList(); updateYamlPreview(); draw(); } };
+    document.getElementById('dup').onclick = () => { const i=sensors.findIndex(s=>s.id===selectedId); if(i>=0){ const c=JSON.parse(JSON.stringify(sensors[i])); c.id=newId(); c.name += ' copy'; c.x+=0.3; c.y+=0.3; sensors.splice(i+1,0,c); selectedId=c.id; refreshList(); openProps(c); buildSocList(); updateYamlPreview(); draw(); } };
+    document.getElementById('up').onclick = () => { const i=sensors.findIndex(s=>s.id===selectedId); if(i>0){ const t=sensors[i]; sensors.splice(i,1); sensors.splice(i-1,0,t); refreshList(); buildSocList(); updateYamlPreview(); draw(); } };
+    document.getElementById('down').onclick = () => { const i=sensors.findIndex(s=>s.id===selectedId); if(i>=0 && i<sensors.length-1){ const t=sensors[i]; sensors.splice(i,1); sensors.splice(i+1,0,t); refreshList(); buildSocList(); updateYamlPreview(); draw(); } };
+
+    // ======= Hit‑testing & interactions =======
+    function hitSensors(x,y,radius=0.6){ const hits=[]; for(let i=sensors.length-1;i>=0;i--){ const s=sensors[i]; if(!sensorPickable(s)) continue; const sw=sensorWorldPos(s); const d=Math.hypot(x-sw.x,y-sw.y); if(d<=radius) hits.push({id:s.id, x0:sw.x, y0:sw.y}); } return hits; }
+    let drag=null; // {kind:'sensor'|'truck', id?, dx, dy, mode?}
+    canvas.addEventListener('mousedown', (e)=>{ const p=screenToWorld(e.offsetX,e.offsetY); const hits = hitSensors(p.x,p.y); if(hits.length){ let chosen = hits[0]; if((e.ctrlKey||e.metaKey) && hits.length>1){ const idx = hits.findIndex(h=>h.id===selectedId); chosen = hits[(idx+1+hits.length)%hits.length]; } selectedId=chosen.id; refreshList(); openProps(sensors.find(s=>s.id===selectedId)); draw(); drag={kind:'sensor', id:chosen.id, dx:p.x-chosen.x0, dy:p.y-chosen.y0, mode:e.shiftKey?'rotate':'move'}; return; } if(hitRig(p.x,p.y)){ drag={kind:'truck', dx:p.x-truck.x, dy:p.y-truck.y}; return; } });
+    window.addEventListener('mousemove', (e)=>{ const r=canvas.getBoundingClientRect(); const p=screenToWorld(e.clientX-r.left, e.clientY-r.top); elCursor.textContent = `x:${p.x.toFixed(2)}m y:${p.y.toFixed(2)}m`; if(!drag) return; if(drag.kind==='sensor'){ const s=sensors.find(x=>x.id===drag.id); if(!s) return; const ms=mountSize(s.mount); const mc=mountCenter(s.mount); if(drag.mode==='move'){ s.x = clamp(p.x - drag.dx - mc.x, -ms.L/2, ms.L/2); s.y = clamp(p.y - drag.dy - mc.y, -ms.W/2, ms.W/2); draw(); openProps(s);} else if(drag.mode==='rotate'){ const worldX = mc.x + s.x, worldY = mc.y + s.y; const ang = Math.atan2(p.y - worldY, p.x - worldX) * 180/Math.PI; s.yaw = ang; draw(); openProps(s);} } else if(drag.kind==='truck'){ truck.x = p.x - drag.dx; truck.y = p.y - drag.dy; draw(); } });
+    window.addEventListener('mouseup', ()=>{ drag=null; });
+    canvas.addEventListener('wheel', (e)=>{ const s=sensors.find(x=>x.id===selectedId); if(!s) return; const delta = -Math.sign(e.deltaY)*2; s.range = clamp(s.range + delta, 1, 500); draw(); openProps(s); e.preventDefault(); }, {passive:false});
+    function hitRig(x,y){ const inside = (cx,cy,w,h)=> Math.abs(x-cx)<=w/2 && Math.abs(y-cy)<=h/2; const h=truck.W; const t1c = trailerCenter(); const t2c = trailer2Center(); return inside(truck.x,truck.y,truck.L,h) || inside(t1c.x,t1c.y,trailer.L,h) || (view.showTrailer2 && inside(t2c.x,t2c.y,trailer2.L,h)); }
+
+    // ======= Import/Export (design JSON) =======
+    document.getElementById('exportJSON').onclick = ()=>{ const data={truck, trailer, trailer2, sensors, pxPerMeter, view}; const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='truck-sensors.json'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),500); };
+    document.getElementById('importJSONbtn').onclick = ()=>{ document.getElementById('importJSON').click(); };
+    document.getElementById('importJSON').addEventListener('change',(e)=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ try{ const o=JSON.parse(r.result);
+        if(o.truck){truck.L=o.truck.L; truck.W=o.truck.W; truck.x=o.truck.x||0; truck.y=o.truck.y||0;}
+        if(o.trailer){ trailer.L=o.trailer.L??trailer.L; trailer.gap=o.trailer.gap??trailer.gap; }
+        if(o.trailer2){ trailer2.L=o.trailer2.L??trailer2.L; trailer2.gap=o.trailer2.gap??trailer2.gap; }
+        if(Array.isArray(o.sensors)){
+          sensors = o.sensors.map((s,i)=>({
+            id: s.id ?? newId(),
+            name: s.name ?? `${s.type||'Sensor'} ${i+1}`,
+            type: s.type ?? 'Generic',
+            mount: (s.mount==='trailer2')?'trailer2':(s.mount==='trailer'?'trailer':'tractor'),
+            color: s.color ?? '#e879f9',
+            x: s.x ?? 0, y: s.y ?? 0,
+            yaw: s.yaw ?? 0, fov: s.fov ?? 90, range: s.range ?? 50,
+            alpha: s.alpha ?? 0.35,
+            visible: s.visible !== false,
+            dot: s.dot !== false,
+            coverage: s.coverage !== false,
+            soc: s.soc ? {...s.soc} : undefined
+          }));
+        }
+        if(o.pxPerMeter) pxPerMeter=o.pxPerMeter;
+        if(o.view){ view.showDots = o.view.showDots!==false; view.showCoverage = o.view.showCoverage!==false; view.showTrailer2 = o.view.showTrailer2!==false; }
+        document.getElementById('showDots').checked = view.showDots; document.getElementById('showCoverage').checked = view.showCoverage; document.getElementById('showTrailer2').checked = view.showTrailer2;
+        syncTruckUI(); reseedUid(); const sel = sensors.find(s=>s.id===selectedId); if(sel && sel.mount==='trailer2' && !view.showTrailer2) selectedId=null; refreshList(); openProps(sensors.find(s=>s.id===selectedId)||null); buildSocList(); updateYamlPreview(); draw(); }catch(err){ console.error(err); alert('Invalid JSON'); } }; r.readAsText(f); });
+    document.getElementById('exportPNG').onclick = ()=>{ const a=document.createElement('a'); a.href=canvas.toDataURL('image/png'); a.download='sensor-coverage.png'; a.click(); };
+
+    // ======= Self-test =======
+    document.getElementById('selftest').onclick = ()=>{ const ok = []; ok.push(typeof gridMeters==='number'); const v=12.34; ok.push( Math.abs(p2m(m2p(v))-v) < 1e-9 ); const yaw=10, fov=40; const half=toRad(fov/2); const start=-toRad(yaw)-half; const end=start+2*half; ok.push(Math.abs((end-start)-toRad(fov))<1e-9); { const c1 = trailerCenter(); const ex = truck.x - (truck.L/2 + trailer.gap + trailer.L/2); ok.push(Math.abs(c1.x-ex)<1e-9); } { const c2 = trailer2Center(); const ex2 = truck.x - (truck.L/2 + trailer.gap + trailer.L + trailer2.gap + trailer2.L/2); ok.push(Math.abs(c2.x-ex2)<1e-9); } const temp={id:999,type:'Generic',mount:'trailer2',x:0,y:0,yaw:0,fov:90,range:10,color:'#fff',alpha:0.3,visible:true,dot:true,coverage:true}; sensors.push(temp); const old=view.showTrailer2; view.showTrailer2=false; const hits=hitSensors(trailer2Center().x,trailer2Center().y); const notPick = hits.findIndex(h=>h.id===999)===-1; view.showTrailer2=old; sensors.pop(); ok.push(notPick); elStatus.textContent = ok.every(Boolean)? 'Self‑test: PASS' : 'Self‑test: FAIL (see console)'; };
+
+    // ======= Truck, scale & view UI =======
+    function syncTruckUI(){ document.getElementById('truckLen').value = truck.L; document.getElementById('truckWid').value = truck.W; document.getElementById('trailerLen').value = trailer.L; document.getElementById('gap1').value = trailer.gap; document.getElementById('trailer2Len').value = trailer2.L; document.getElementById('gap2').value = trailer2.gap; document.getElementById('scale').value = pxPerMeter; }
+    document.getElementById('truckLen').oninput = (e)=>{ truck.L=parseFloat(e.target.value)||truck.L; draw(); };
+    document.getElementById('truckWid').oninput = (e)=>{ truck.W=parseFloat(e.target.value)||truck.W; draw(); };
+    document.getElementById('trailerLen').oninput = (e)=>{ trailer.L=parseFloat(e.target.value)||trailer.L; draw(); };
+    document.getElementById('gap1').oninput = (e)=>{ trailer.gap=parseFloat(e.target.value)||trailer.gap; draw(); };
+    document.getElementById('trailer2Len').oninput = (e)=>{ trailer2.L=parseFloat(e.target.value)||trailer2.L; draw(); };
+    document.getElementById('gap2').oninput = (e)=>{ trailer2.gap=parseFloat(e.target.value)||trailer2.gap; draw(); };
+    document.getElementById('scale').oninput = (e)=>{ pxPerMeter=parseFloat(e.target.value)||pxPerMeter; draw(); };
+    document.getElementById('showDots').onchange = (e)=>{ view.showDots = e.target.checked; draw(); };
+    document.getElementById('showCoverage').onchange = (e)=>{ view.showCoverage = e.target.checked; draw(); };
+    document.getElementById('showTrailer2').onchange = (e)=>{ view.showTrailer2 = e.target.checked; const sel = sensors.find(s=>s.id===selectedId); if(sel && sel.mount==='trailer2' && !view.showTrailer2){ selectedId=null; openProps(null);} draw(); };
+
+    // ======= Primitives =======
+    function line(x1,y1,x2,y2){ ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); }
+    function roundedRect(ctx,x,y,w,h,r){ const rr=Math.max(0,Math.min(r,w/2,h/2)); ctx.beginPath(); ctx.moveTo(x+rr,y); ctx.lineTo(x+w-rr,y); ctx.quadraticCurveTo(x+w,y,x+w,y+rr); ctx.lineTo(x+w,y+h-rr); ctx.quadraticCurveTo(x+w,y+h,x+w-rr,y+h); ctx.lineTo(x+rr,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-rr); ctx.lineTo(x,y+rr); ctx.quadraticCurveTo(x,y,x+rr,y); ctx.closePath(); }
+    function toHex(c){ const t=document.createElement('canvas').getContext('2d'); t.fillStyle=c; const v=t.fillStyle; return /^#[0-9a-f]{6}$/i.test(v)?v:'#ffffff'; }
+    function hexToRgba(hex,a){ const h=toHex(hex).slice(1); const r=parseInt(h.substr(0,2),16), g=parseInt(h.substr(2,2),16), b=parseInt(h.substr(4,2),16); return `rgba(${r},${g},${b},${a})`; }
+
+    // ======= Resize & start =======
+    function resize(){ const rect=canvas.parentElement.getBoundingClientRect(); W=Math.floor(rect.width*dpr); H=Math.floor(rect.height*dpr); canvas.width=W; canvas.height=H; canvas.style.width=rect.width+'px'; canvas.style.height=rect.height+'px'; draw(); }
+    window.addEventListener('resize', resize);
+    document.getElementById('showDots').checked = view.showDots; document.getElementById('showCoverage').checked = view.showCoverage; document.getElementById('showTrailer2').checked = view.showTrailer2;
+    resize();
+
+    // seed sensors (tractor + each trailer)
+    const seed=[
+      {type:'Camera', mount:'tractor', name:'Front Long', x: truck.L/2-0.3, y: 0.0, yaw:0,   fov:90,  range:80, color:'#60a5fa'},
+      {type:'Radar',  mount:'trailer', name:'Trailer1 Front', x: trailer.L/2 - 0.4, y: 0.0, yaw:0, fov:120, range:120, color:'#f97316'},
+      {type:'Ultrasonic', mount:'trailer', name:'Trailer1 Rear', x: -trailer.L/2 + 0.3, y: 0.0, yaw:180, fov:80, range:6, color:'#fde047'},
+      {type:'Lidar',  mount:'trailer2', name:'Trailer2 Side', x: 0.0, y: truck.W/2-0.2, yaw:90, fov:120, range:100, color:'#22c55e'}
+    ];
+    seed.forEach((p)=>{ const s={id:newId(), alpha:0.35, visible:true, dot:true, coverage:true, ...p}; ensureSoc(s,true); sensors.push(s); });
+    selectedId = sensors[0].id; refreshList(); openProps(sensors[0]); buildSocList(); updateYamlPreview(); draw();
+  })();
+  </script>
+</body>
+</html>
